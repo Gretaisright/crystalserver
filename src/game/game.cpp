@@ -6078,8 +6078,8 @@ void Game::playerSetFightModes(uint32_t playerId, FightMode_t fightMode, PvpMode
 
 	if (g_configManager().getBoolean(TOGGLE_EXPERT_PVP)) {
 		auto oldPvpMode = player->pvpMode;
+		// Black skull cannot activate Red Fist
 		if (player->getSkull() == SKULL_BLACK && pvpMode == PVP_MODE_RED_FIST) {
-			// Black skull cannot activate Red Fist
 			player->setPvpMode(oldPvpMode);
 		} else if (worldType == WORLDTYPE_OPTIONAL && pvpMode == PVP_MODE_RED_FIST) {
 			player->setPvpMode(player->pvpMode);
@@ -8720,6 +8720,16 @@ void Game::playerInviteToParty(uint32_t playerId, uint32_t invitedId) {
 		return;
 	}
 
+	if (player->isInPvpSituation()) {
+		player->sendTextMessage(MESSAGE_PARTY_MANAGEMENT, "You can't invite players while you are in an aggression.");
+		return;
+	}
+
+	if (invitedPlayer->isInPvpSituation()) {
+		player->sendTextMessage(MESSAGE_PARTY_MANAGEMENT, "This player can't be invited while he is in an aggression.");
+		return;
+	}
+
 	std::shared_ptr<Party> party = player->getParty();
 	if (!party) {
 		party = Party::create(player);
@@ -8764,6 +8774,11 @@ void Game::playerJoinParty(uint32_t playerId, uint32_t leaderId) {
 
 	auto party = leader->getParty();
 	if (!party || party->getLeader() != leader) {
+		return;
+	}
+
+	if (player->isInPvpSituation()) {
+		player->sendTextMessage(MESSAGE_PARTY_MANAGEMENT, "You can't join while you are in an aggression.");
 		return;
 	}
 

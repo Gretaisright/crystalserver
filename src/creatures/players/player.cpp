@@ -1383,7 +1383,12 @@ bool Player::canCombat(const std::shared_ptr<Creature> &creature) const {
 			return true;
 		}
 
-		auto owner = monster->getMaster()->getPlayer();
+		const auto master = monster->getMaster();
+		if (!master) {
+			return true;
+		}
+
+		auto owner = master->getPlayer();
 		if (!owner || owner == getPlayer() || isPartner(owner) || isGuildMate(owner)) {
 			return true;
 		}
@@ -1397,7 +1402,7 @@ bool Player::canCombat(const std::shared_ptr<Creature> &creature) const {
 		// red fist mode forces not to have secure mode.
 		// on all cases, if they have previous aggression, attacking attempt should be successful.
 		// if he is in white-hand mode, then the target must have aggression with the player OR with his partners
-		if (!hasSecureMode() || Combat::isInPvpZone(std::shared_ptr<Creature>(const_cast<Player*>(this)), player) || isAggressiveCreature(player, pvpMode == PVP_MODE_WHITE_HAND)) {
+		if (!hasSecureMode() || Combat::isInPvpZone(std::const_pointer_cast<Player>(static_self_cast<Player>()), player) || isAggressiveCreature(player, pvpMode == PVP_MODE_WHITE_HAND)) {
 			return true;
 		}
 
@@ -1418,12 +1423,13 @@ bool Player::canWalkthrough(const std::shared_ptr<Creature> &creature) {
 	if (!player) {
 		if (expertPvpWalkThrough) {
 			if (const auto &monster = creature->getMonster()) {
-				if (!monster->isSummon() || !monster->getMaster()->getPlayer()) {
+				const auto master = monster->getMaster();
+				if (!monster->isSummon() || !master || !master->getPlayer()) {
 					return false;
 				}
 
-				const auto master = monster->getMaster()->getPlayer();
-				return master != getPlayer() && canWalkthrough(master);
+				const auto owner = master->getPlayer();
+				return owner != getPlayer() && canWalkthrough(owner);
 			}
 		}
 		return false;
@@ -6318,6 +6324,7 @@ void Player::onAttackedCreature(const std::shared_ptr<Creature> &target) {
 
 		if (getSkull() == SKULL_NONE && getSkullClient(targetPlayer) == SKULL_YELLOW) {
 			addAttacked(targetPlayer);
+			targetPlayer->addAttackedBy(static_self_cast<Player>());
 			targetPlayer->sendCreatureSkull(static_self_cast<Player>());
 		} else if (!targetPlayer->hasAttacked(static_self_cast<Player>())) {
 			if (!pzLocked) {
@@ -6327,6 +6334,7 @@ void Player::onAttackedCreature(const std::shared_ptr<Creature> &target) {
 
 			if (!Combat::isInPvpZone(static_self_cast<Player>(), targetPlayer) && !isInWar(targetPlayer)) {
 				addAttacked(targetPlayer);
+				targetPlayer->addAttackedBy(static_self_cast<Player>());
 
 				if (targetPlayer->getSkull() == SKULL_NONE && getSkull() == SKULL_NONE && !targetPlayer->hasKilled(static_self_cast<Player>())) {
 					setSkull(SKULL_WHITE);
@@ -6982,6 +6990,11 @@ Skulls_t Player::getSkullClient(const std::shared_ptr<Creature> &creature) {
 			}
 		}
 
+		bool expertPvp = g_configManager().getBoolean(TOGGLE_EXPERT_PVP);
+		if (!expertPvp && isInWar(player)) {
+			return SKULL_GREEN;
+		}
+
 		if (player->hasKilled(getPlayer())) {
 			return SKULL_ORANGE;
 		}
@@ -6990,7 +7003,7 @@ Skulls_t Player::getSkullClient(const std::shared_ptr<Creature> &creature) {
 			return SKULL_YELLOW;
 		}
 
-		if (m_party && m_party == player->m_party) {
+		if (!expertPvp && isPartner(player)) {
 			return SKULL_GREEN;
 		}
 	}
@@ -7050,6 +7063,10 @@ void Player::clearAttacked() {
 
 bool Player::isAttackedBy(const std::shared_ptr<Player> &attacker) const {
 	if (hasFlag(PlayerFlags_t::NotGainInFight) || !attacker) {
+		return false;
+	}
+
+	if (attacker->isRemoved()) {
 		return false;
 	}
 
@@ -12168,15 +12185,19 @@ bool Player::hasPvpActivity(const std::shared_ptr<Player> &player, bool guildAnd
 		return false;
 	}
 
+	if (player->isRemoved()) {
+		return false;
+	}
+
 	auto playerHasAttacked = [time](const std::shared_ptr<Player> &a, const std::shared_ptr<Player> &b) {
-		if (!a || !b) {
+		if (!a || !b || a->isRemoved() || b->isRemoved()) {
 			return false;
 		}
 
 		return a->hasAttacked(b, time) && b->isAttackedBy(a);
 	};
 
-	if (hasAttacked(player) || player->hasAttacked(std::const_pointer_cast<Player>(getPlayer()))) {
+	if (hasAttacked(player) || player->hasAttacked(std::const_pointer_cast<Player>(static_self_cast<Player>()))) {
 		return true;
 	}
 
@@ -12191,6 +12212,10 @@ bool Player::hasPvpActivity(const std::shared_ptr<Player> &player, bool guildAnd
 
 		const auto &party = getParty();
 		if (party) {
+			if (party->getLeader()->hasPvpActivity(player, time)) {
+				return true;
+			}
+
 			for (auto it : party->getMembers()) {
 				if (it->hasPvpActivity(player, time)) {
 					return true;
@@ -12211,13 +12236,22 @@ bool Player::isAggressiveCreature(const std::shared_ptr<Creature> &creature, boo
 		return false;
 	}
 
+	if (creature->isRemoved()) {
+		return false;
+	}
+
 	const auto &player = creature->getPlayer();
 	if (!player) {
 		if (!creature->isSummon()) {
 			return false;
 		}
 
-		return isAggressiveCreature(creature->getMaster(), guildAndParty, time);
+		const auto &master = creature->getMaster();
+		if (!master || master->isRemoved()) {
+			return false;
+		}
+
+		return isAggressiveCreature(master, guildAndParty, time);
 	}
 
 	if (player == getPlayer()) {
