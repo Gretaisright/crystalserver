@@ -406,6 +406,8 @@ ReturnValue Combat::canDoCombat(const std::shared_ptr<Creature> &attacker, const
 
 				if (isProtected(attackerPlayer, targetPlayer)) {
 					return RETURNVALUE_YOUMAYNOTATTACKTHISPLAYER;
+				} else if (!attackerPlayer->canCombat(targetPlayer)) {
+					return RETURNVALUE_ADJUSTYOURCOMBAT;
 				}
 
 				// nopvp-zone
@@ -433,6 +435,8 @@ ReturnValue Combat::canDoCombat(const std::shared_ptr<Creature> &attacker, const
 
 					if (isProtected(masterAttackerPlayer, targetPlayer)) {
 						return RETURNVALUE_YOUMAYNOTATTACKTHISPLAYER;
+					} else if (!masterAttackerPlayer->canCombat(targetPlayer)) {
+						return RETURNVALUE_ADJUSTYOURCOMBAT;
 					}
 				}
 			}
@@ -452,13 +456,29 @@ ReturnValue Combat::canDoCombat(const std::shared_ptr<Creature> &attacker, const
 					return RETURNVALUE_YOUMAYNOTATTACKTHISCREATURE;
 				}
 
-				if (target->isSummon() && targetMasterPlayer && target->getZoneType() == ZONE_NOPVP) {
-					return RETURNVALUE_ACTIONNOTPERMITTEDINANOPVPZONE;
+				if (g_game().getOwnerPlayer(target)) {
+					if (target->getZoneType() == ZONE_NOPVP) {
+						return RETURNVALUE_ACTIONNOTPERMITTEDINANOPVPZONE;
+					} else if (g_configManager().getBoolean(TOGGLE_EXPERT_PVP) && isProtected(attackerPlayer, targetPlayer)) {
+						return RETURNVALUE_YOUMAYNOTATTACKTHISCREATURE;
+					} else if (!attackerPlayer->canCombat(target)) {
+						return RETURNVALUE_ADJUSTYOURCOMBAT;
+					}
 				}
 			} else if (attackerMonster) {
 				if ((!targetMaster || !targetMasterPlayer) && attacker->getFaction() == FACTION_DEFAULT) {
 					if (!attackerMaster || !masterAttackerPlayer) {
 						return RETURNVALUE_YOUMAYNOTATTACKTHISCREATURE;
+					}
+				} else if (g_configManager().getBoolean(TOGGLE_EXPERT_PVP)) {
+					if (g_game().getOwnerPlayer(target)) {
+						if (target->getZoneType() == ZONE_NOPVP) {
+							return RETURNVALUE_ACTIONNOTPERMITTEDINANOPVPZONE;
+						} else if (isProtected(attackerPlayer, targetPlayer)) {
+							return RETURNVALUE_YOUMAYNOTATTACKTHISCREATURE;
+						} else if (!attackerPlayer->canCombat(target)) {
+							return RETURNVALUE_ADJUSTYOURCOMBAT;
+						}
 					}
 				}
 			}
@@ -2371,6 +2391,11 @@ void AreaCombat::setupExtArea(const std::list<uint32_t> &list, uint32_t rows) {
 //**********************************************************//
 
 void MagicField::onStepInField(const std::shared_ptr<Creature> &creature) {
+	const auto &target = g_game().getOwnerPlayer(creature);
+	if (target && !isAggressive(target)) {
+		return;
+	}
+
 	// remove magic walls/wild growth
 	if ((!isBlocking() && g_game().getWorldType() == WORLDTYPE_OPTIONAL && id == ITEM_MAGICWALL_SAFE) || id == ITEM_WILDGROWTH_SAFE) {
 		if (!creature->isInGhostMode()) {
@@ -2581,6 +2606,19 @@ int32_t MagicField::getDamage() const {
 		return it.conditionDamage->getTotalDamage();
 	}
 	return 0;
+}
+
+bool MagicField::isAggressive(const std::shared_ptr<Player> &player) const {
+	if (!g_configManager().getBoolean(TOGGLE_EXPERT_PVP) && g_configManager().getBoolean(EXPERT_PVP_CANWALKTHROUGHMAGICWALLS)) {
+		return true;
+	}
+
+	const auto &caster = g_game().getOwnerPlayer(getOwnerId());
+	if (!caster || pvpMode == PVP_MODE_RED_FIST) {
+		return true;
+	}
+
+	return caster->isAggressiveCreature(player, pvpMode == PVP_MODE_WHITE_HAND, createTime) || pvpMode == PVP_MODE_YELLOW_HAND && player->getSkull() != SKULL_NONE;
 }
 
 MatrixArea::MatrixArea(uint32_t initRows, uint32_t initCols) :
