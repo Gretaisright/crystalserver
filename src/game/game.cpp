@@ -6078,7 +6078,10 @@ void Game::playerSetFightModes(uint32_t playerId, FightMode_t fightMode, PvpMode
 
 	if (g_configManager().getBoolean(TOGGLE_EXPERT_PVP)) {
 		auto oldPvpMode = player->pvpMode;
-		if (worldType == WORLDTYPE_OPTIONAL && pvpMode == PVP_MODE_RED_FIST) {
+		if (player->getSkull() == SKULL_BLACK && pvpMode == PVP_MODE_RED_FIST) {
+			// Black skull cannot activate Red Fist
+			player->setPvpMode(oldPvpMode);
+		} else if (worldType == WORLDTYPE_OPTIONAL && pvpMode == PVP_MODE_RED_FIST) {
 			player->setPvpMode(player->pvpMode);
 		} else if (worldType == WORLDTYPE_HARDCORE && pvpMode != PVP_MODE_RED_FIST) {
 			player->setPvpMode(PVP_MODE_RED_FIST);
