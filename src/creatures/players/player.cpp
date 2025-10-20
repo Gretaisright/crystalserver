@@ -1399,15 +1399,36 @@ bool Player::canCombat(const std::shared_ptr<Creature> &creature) const {
 			return false;
 		}
 
-		// red fist mode forces not to have secure mode.
-		// on all cases, if they have previous aggression, attacking attempt should be successful.
-		// if he is in white-hand mode, then the target must have aggression with the player OR with his partners
-		if (!hasSecureMode() || Combat::isInPvpZone(std::const_pointer_cast<Player>(static_self_cast<Player>()), player) || isAggressiveCreature(player, pvpMode == PVP_MODE_WHITE_HAND)) {
-			return true;
+		// Cannot attack party/guild members in any mode
+		if (isPartner(player) || isGuildMate(player)) {
+			return false;
 		}
 
-		// last case is that he is blocking him, without previous aggression details, as the target has a white skull or furtherer.
-		return pvpMode == PVP_MODE_YELLOW_HAND && player->getSkull() != SKULL_NONE;
+		// Apply PvP mode rules
+		switch (pvpMode) {
+			case PVP_MODE_DOVE: {
+				// Dove: Only attack those who have attacked you
+				return hasAttacked(player) || player->hasAttacked(std::const_pointer_cast<Player>(static_self_cast<Player>()));
+			}
+			
+			case PVP_MODE_WHITE_HAND: {
+				// White Hand: Attack those who attacked you OR your party/guild members
+				return isAggressiveCreature(player, true); // guildAndParty = true
+			}
+			
+			case PVP_MODE_YELLOW_HAND: {
+				// Yellow Hand: Attack any player with skull (except party/guild)
+				return player->getSkull() != SKULL_NONE;
+			}
+			
+			case PVP_MODE_RED_FIST: {
+				// Red Fist: Attack everyone (except party/guild)
+				return true;
+			}
+			
+			default:
+				return false;
+		}
 	}
 
 	return false;
@@ -6317,17 +6338,58 @@ void Player::onAttackedCreature(const std::shared_ptr<Creature> &target) {
 			return;
 		}
 
-		if (!pzLocked && g_game().getWorldType() == WORLDTYPE_HARDCORE) {
+		// Apply PvP mode specific rules for pz lock and skull
+		bool shouldPzLock = false;
+		bool shouldYellowSkull = false;
+		
+		switch (pvpMode) {
+			case PVP_MODE_DOVE: {
+				// Dove: No pz lock, no yellow skull
+				shouldPzLock = false;
+				shouldYellowSkull = false;
+				break;
+			}
+			
+			case PVP_MODE_WHITE_HAND: {
+				// White Hand: No pz lock, but yellow skull for target
+				shouldPzLock = false;
+				shouldYellowSkull = true;
+				break;
+			}
+			
+			case PVP_MODE_YELLOW_HAND: {
+				// Yellow Hand: pz lock and yellow skull for target
+				shouldPzLock = true;
+				shouldYellowSkull = true;
+				break;
+			}
+			
+			case PVP_MODE_RED_FIST: {
+				// Red Fist: pz lock, no yellow skull (can attack anyone)
+				shouldPzLock = true;
+				shouldYellowSkull = false;
+				break;
+			}
+			
+			default:
+				shouldPzLock = false;
+				shouldYellowSkull = false;
+				break;
+		}
+		
+		// Apply pz lock if needed
+		if (shouldPzLock && !pzLocked) {
 			pzLocked = true;
 			sendIcons();
 		}
-
-		if (getSkull() == SKULL_NONE && getSkullClient(targetPlayer) == SKULL_YELLOW) {
+		
+		// Apply yellow skull if needed
+		if (shouldYellowSkull && getSkull() == SKULL_NONE && getSkullClient(targetPlayer) == SKULL_YELLOW) {
 			addAttacked(targetPlayer);
 			targetPlayer->addAttackedBy(static_self_cast<Player>());
 			targetPlayer->sendCreatureSkull(static_self_cast<Player>());
 		} else if (!targetPlayer->hasAttacked(static_self_cast<Player>())) {
-			if (!pzLocked) {
+			if (shouldPzLock && !pzLocked) {
 				pzLocked = true;
 				sendIcons();
 			}
