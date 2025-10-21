@@ -1410,22 +1410,22 @@ bool Player::canCombat(const std::shared_ptr<Creature> &creature) const {
 				// Dove: Only attack those who have attacked you
 				return hasAttacked(player) || player->hasAttacked(std::const_pointer_cast<Player>(static_self_cast<Player>()));
 			}
-			
+
 			case PVP_MODE_WHITE_HAND: {
 				// White Hand: Attack those who attacked you OR your party/guild members
 				return isAggressiveCreature(player, true); // guildAndParty = true
 			}
-			
+
 			case PVP_MODE_YELLOW_HAND: {
 				// Yellow Hand: Attack any player with skull (except party/guild)
 				return player->getSkull() != SKULL_NONE;
 			}
-			
+
 			case PVP_MODE_RED_FIST: {
 				// Red Fist: Attack everyone (except party/guild)
 				return true;
 			}
-			
+
 			default:
 				return false;
 		}
@@ -3710,11 +3710,11 @@ bool Player::isPzLocked() const {
 
 BlockType_t Player::blockHit(const std::shared_ptr<Creature> &attacker, const CombatType_t &combatType, int32_t &damage, bool checkDefense, bool checkArmor, bool field) {
 	BlockType_t blockType = Creature::blockHit(attacker, combatType, damage, checkDefense, checkArmor, field);
-/*
-	if (attacker) {
-		sendCreatureSquare(attacker, SQ_COLOR_BLACK);
-	}
-*/
+	/*
+	    if (attacker) {
+	        sendCreatureSquare(attacker, SQ_COLOR_BLACK);
+	    }
+	*/
 	if (blockType != BLOCK_NONE) {
 		return blockType;
 	}
@@ -6341,7 +6341,7 @@ void Player::onAttackedCreature(const std::shared_ptr<Creature> &target) {
 		// Apply PvP mode specific rules for pz lock and skull
 		bool shouldPzLock = false;
 		bool shouldYellowSkull = false;
-		
+
 		switch (pvpMode) {
 			case PVP_MODE_DOVE: {
 				// Dove: No pz lock, no yellow skull
@@ -6349,40 +6349,40 @@ void Player::onAttackedCreature(const std::shared_ptr<Creature> &target) {
 				shouldYellowSkull = false;
 				break;
 			}
-			
+
 			case PVP_MODE_WHITE_HAND: {
 				// White Hand: No pz lock, but yellow skull for target
 				shouldPzLock = false;
 				shouldYellowSkull = true;
 				break;
 			}
-			
+
 			case PVP_MODE_YELLOW_HAND: {
 				// Yellow Hand: pz lock and yellow skull for target
 				shouldPzLock = true;
 				shouldYellowSkull = true;
 				break;
 			}
-			
+
 			case PVP_MODE_RED_FIST: {
 				// Red Fist: pz lock, no yellow skull (can attack anyone)
 				shouldPzLock = true;
 				shouldYellowSkull = false;
 				break;
 			}
-			
+
 			default:
 				shouldPzLock = false;
 				shouldYellowSkull = false;
 				break;
 		}
-		
+
 		// Apply pz lock if needed
 		if (shouldPzLock && !pzLocked) {
 			pzLocked = true;
 			sendIcons();
 		}
-		
+
 		// Apply yellow skull if needed
 		if (shouldYellowSkull && getSkull() == SKULL_NONE && getSkullClient(targetPlayer) == SKULL_YELLOW) {
 			addAttacked(targetPlayer);
