@@ -140,7 +140,9 @@ int Lua::protectedCall(lua_State* L, int nargs, int nresults) {
 		}
 
 		for (auto &ch : label) {
-			if (ch == '\\') ch = '/';
+			if (ch == '\\') {
+				ch = '/';
+			}
 		}
 		g_stats().addLuaStats(new Stat(ns, label, ""));
 	}

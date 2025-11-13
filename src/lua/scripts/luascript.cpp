@@ -348,7 +348,9 @@ bool LuaScriptInterface::callFunction(int params) const {
 	}
 
 	for (auto &ch : label) {
-		if (ch == '\\') ch = '/';
+		if (ch == '\\') {
+			ch = '/';
+		}
 	}
 
 	g_stats().addLuaStats(new Stat(ns, label, ""));
